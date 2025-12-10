@@ -1,0 +1,80 @@
+/* Smooth fade-in from bottom */
+.fade-in {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.fade-in-delay {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: fadeInUp 0.6s ease-out 0.2s forwards;
+}
+
+.fade-in-delay-2 {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: fadeInUp 0.6s ease-out 0.4s forwards;
+}
+
+/* Animation keyframes */
+@keyframes fadeInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+/* Smooth card lift effect */
+.lift-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lift-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+}
+/* Smooth image zoom on hover */
+.img-zoom {
+    overflow: hidden;
+}
+
+.img-zoom img {
+    transition: transform 0.25s ease;
+}
+
+.img-zoom:hover img {
+    transform: scale(1.05);
+}
+/* Click shrink feedback */
+.btn-press {
+    transition: transform 0.15s ease;
+}
+
+.btn-press:active {
+    transform: scale(0.95);
+}
+/* Toast notification */
+.toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #16a34a;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    font-size: 14px;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+    z-index: 9999;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.toast.error {
+    background: #dc2626;
+}

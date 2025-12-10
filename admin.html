@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>FreshMart — Admin</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 16px; max-width:1100px; margin:0 auto; }
+    h1 { margin: 0 0 8px; }
+    input, button, select, textarea { padding:8px; margin:6px 0; width:100%; box-sizing:border-box; }
+    .row { display:flex; gap:8px; }
+    .col { flex:1; }
+    .card { border:1px solid #eee; padding:12px; border-radius:8px; background:white; margin-bottom:12px; }
+    .actions button { margin-right:8px; }
+    .small { width:auto; display:inline-block; padding:6px 10px; }
+    #authMsg { color:red; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { padding:8px; border-bottom:1px solid #eee; text-align:left; }
+  </style>
+</head>
+<body>
+  <h1>FreshMart — Admin</h1>
+
+  <div id="authArea" class="card">
+    <div id="authMsg"></div>
+    <div id="unauth" style="">
+      <input id="email" type="email" placeholder="Admin email" />
+      <input id="password" type="password" placeholder="Password" />
+      <div class="row">
+        <button id="loginBtn" class="small">Login</button>
+        <button id="signupBtn" class="small">Sign up</button>
+      </div>
+      <div style="margin-top:8px">
+        <small>Use the admin account created in Supabase Auth (then add their uid to the admins table).</small>
+      </div>
+    </div>
+    <div id="authOk" style="display:none;">
+      <div>Signed in as <span id="authEmail"></span></div>
+      <div style="margin-top:8px">
+        <button id="signOutBtn" class="small">Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="adminUI" style="display:none;">
+    <div class="card">
+      <h2>Products</h2>
+      <div id="productList"></div>
+
+      <h3>Add / Update product</h3>
+      <input id="pName" placeholder="Name" />
+      <input id="pPrice" placeholder="Price" type="number" step="0.01" />
+      <input id="pCategory" placeholder="Category" />
+      <input id="pImage" placeholder="Image URL (optional)" />
+      <div class="row">
+        <button id="addBtn">Add Product</button>
+        <button id="updateBtn" style="display:none;">Update Product</button>
+        <button id="cancelEditBtn" style="display:none;">Cancel</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Orders</h2>
+      <div id="ordersList">Loading...</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // CONFIG - Replace these values:
+    const SUPABASE_URL = "https://ujwwiuhmylcrgpofgxly.supabase.co"; // replace
+    const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqd3dpdWhteWxjcmdwb2ZneGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzNzMwNjksImV4cCI6MjA4MDk0OTA2OX0.UFPKwGN585SrFZ3Tk8YmC2AYvKMWMRhfthAa_-5QeNY"; // replace
+    // ---------------------------------
+    const supabase = supabaseLib.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+    // UI elements
+    const authMsg = document.getElementById('authMsg');
+    const unauth = document.getElementById('unauth');
+    const authOk = document.getElementById('authOk');
+    const authEmail = document.getElementById('authEmail');
+    const adminUI = document.getElementById('adminUI');
+
+    const emailInput = document.getElementById('email');
+    const passInput = document.getElementById('password');
+    const loginBtn = document.getElementById('loginBtn');
+    const signupBtn = document.getElementById('signupBtn');
+    const signOutBtn = document.getElementById('signOutBtn');
+
+    const productList = document.getElementById('productList');
+    const ordersList = document.getElementById('ordersList');
+
+    const pName = document.getElementById('pName');
+    const pPrice = document.getElementById('pPrice');
+    const pCategory = document.getElementById('pCategory');
+    const pImage = document.getElementById('pImage');
+    const addBtn = document.getElementById('addBtn');
+    const updateBtn = document.getElementById('updateBtn');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+    let editingId = null;
+
+    // helpers
+    function showMsg(m, err=false) { authMsg.textContent = m; authMsg.style.color = err? 'red':'green'; setTimeout(()=>authMsg.textContent='',(err?5000:3000)); }
+    function isAdminUser(user) {
+      // checks admins table for uid
+      return supabase.from('admins').select('id').eq('uid', user.id).limit(1).then(r=> {
+        if (r.error) return false;
+        return Array.isArray(r.data) && r.data.length>0;
+      });
+    }
+
+    // AUTH
+    loginBtn.onclick = async () => {
+      const email = emailInput.value.trim();
+      const password = passInput.value;
+      if (!email || !password) return showMsg('Enter email + password', true);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return showMsg(error.message, true);
+      await onSignedIn();
+    };
+
+    signupBtn.onclick = async () => {
+      const email = emailInput.value.trim();
+      const password = passInput.value;
+      if (!email || !password) return showMsg('Enter email + password', true);
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) return showMsg(error.message, true);
+      showMsg('Signup ok — verify email if required', false);
+    };
+
+    signOutBtn.onclick = async () => {
+      await supabase.auth.signOut();
+      unauth.style.display = '';
+      authOk.style.display = 'none';
+      adminUI.style.display = 'none';
+    };
+
+    async function onSignedIn() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return showMsg('No user', true);
+      authEmail.textContent = user.email;
+      const admin = await isAdminUser(user);
+      if (!admin) {
+        await supabase.auth.signOut();
+        return showMsg('Not authorized — your account is not an admin', true);
+      }
+      unauth.style.display = 'none';
+      authOk.style.display = '';
+      adminUI.style.display = '';
+      loadProducts();
+      loadOrders();
+    }
+
+    // monitor auth state
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') { unauth.style.display=''; authOk.style.display='none'; adminUI.style.display='none'; }
+      if (event === 'SIGNED_IN') onSignedIn();
+    });
+
+    // PRODUCTS CRUD
+    async function loadProducts() {
+      productList.innerHTML = 'Loading...';
+      const { data, error } = await supabase.from('products').select('*').order('id', { ascending:false });
+      if (error) { productList.innerHTML = 'Failed to load products: '+error.message; return; }
+      if (!data.length) productList.innerHTML = '<div>No products yet</div>';
+      productList.innerHTML = '';
+      data.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <b>${escapeHtml(p.name)}</b><br/>
+              ₹ ${p.price} — ${p.category || ''}
+            </div>
+            <div>
+              <button data-id="${p.id}" class="editBtn small">Edit</button>
+              <button data-id="${p.id}" class="delBtn small">Delete</button>
+            </div>
+          </div>
+        `;
+        productList.appendChild(div);
+      });
+
+      // attach handlers
+      productList.querySelectorAll('.delBtn').forEach(b=>{
+        b.onclick = async ()=> {
+          if (!confirm('Delete product?')) return;
+          const id = b.dataset.id;
+          const { error } = await supabase.from('products').delete().eq('id', id);
+          if (error) return showMsg('Delete failed: '+error.message, true);
+          showMsg('Deleted');
+          loadProducts();
+        };
+      });
+      productList.querySelectorAll('.editBtn').forEach(b=>{
+        b.onclick = async ()=> {
+          const id = b.dataset.id;
+          const { data } = await supabase.from('products').select('*').eq('id', id).single();
+          editingId = id;
+          pName.value = data.name || '';
+          pPrice.value = data.price || '';
+          pCategory.value = data.category || '';
+          pImage.value = data.image_url || '';
+          addBtn.style.display = 'none';
+          updateBtn.style.display = '';
+          cancelEditBtn.style.display = '';
+        };
+      });
+    }
+
+    addBtn.onclick = async ()=>{
+      const name = pName.value.trim(); const price = parseFloat(pPrice.value||0); const category = pCategory.value.trim(); const image_url = pImage.value.trim() || null;
+      if (!name) return showMsg('Name required', true);
+      const { error } = await supabase.from('products').insert([{ name, price, category, image_url }]);
+      if (error) return showMsg('Add failed: '+error.message, true);
+      pName.value=''; pPrice.value=''; pCategory.value=''; pImage.value='';
+      showMsg('Added');
+      loadProducts();
+    };
+
+    updateBtn.onclick = async ()=> {
+      if (!editingId) return;
+      const name = pName.value.trim(); const price = parseFloat(pPrice.value||0); const category = pCategory.value.trim(); const image_url = pImage.value.trim() || null;
+      const { error } = await supabase.from('products').update({ name, price, category, image_url }).eq('id', editingId);
+      if (error) return showMsg('Update failed: '+error.message, true);
+      editingId = null;
+      pName.value=''; pPrice.value=''; pCategory.value=''; pImage.value='';
+      addBtn.style.display = ''; updateBtn.style.display = 'none'; cancelEditBtn.style.display = 'none';
+      showMsg('Updated');
+      loadProducts();
+    };
+
+    cancelEditBtn.onclick = ()=> {
+      editingId = null;
+      pName.value=''; pPrice.value=''; pCategory.value=''; pImage.value='';
+      addBtn.style.display = ''; updateBtn.style.display = 'none'; cancelEditBtn.style.display = 'none';
+    };
+
+    // ORDERS (admin view)
+    async function loadOrders() {
+      ordersList.innerHTML = 'Loading...';
+      const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending:false });
+      if (error) { ordersList.innerHTML = 'Failed to load orders: '+error.message; return; }
+      if (!data.length) { ordersList.innerHTML = '<div>No orders yet</div>'; return;}
+      // simple table
+      const table = document.createElement('table');
+      table.innerHTML = `<thead><tr><th>Order ID</th><th>User</th><th>Created</th><th>Total</th><th>Items</th></tr></thead>`;
+      const tbody = document.createElement('tbody');
+      data.forEach(o => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${o.id}</td><td>${escapeHtml(o.user_email||'')}</td><td>${new Date(o.created_at).toLocaleString()}</td><td>₹ ${o.total}</td><td><pre style="white-space:pre-wrap;max-width:480px">${escapeHtml(JSON.stringify(o.items))}</pre></td>`;
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      ordersList.innerHTML = '';
+      ordersList.appendChild(table);
+    }
+
+    // small helper
+    function escapeHtml(s){ if (!s) return ''; return String(s).replace(/[&<>"']/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]); }
+
+    // init: check session
+    (async ()=> {
+      const { data } = await supabase.auth.getSession();
+      if (data.session && data.session.user) {
+        await onSignedIn();
+      } else {
+        unauth.style.display = '';
+      }
+    })();
+  </script>
+</body>
+</html>

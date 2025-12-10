@@ -1,29 +1,36 @@
-/* FINAL script.js - use this file on GitHub Pages
-   IMPORTANT: set API_BASE to your live backend
-*/
-const API_BASE = "https://freshmart2.42web.io/backend/";
+/* final script.js for GitHub Pages + Supabase backend */
 
-// ---------- UI toast ----------
+// =========== CONFIG ===========
+const SUPABASE_URL = "https://ujwwiuhmylcrgpofgxly.supabase.co"; // replace
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqd3dpdWhteWxjcmdwb2ZneGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzNzMwNjksImV4cCI6MjA4MDk0OTA2OX0.UFPKwGN585SrFZ3Tk8YmC2AYvKMWMRhfthAa_-5QeNY";                 // replace
+const API_PRODUCTS = `${SUPABASE_URL}/rest/v1/products?select=id,name,price,category,image_url&order=id.desc`;
+
+// helper to call supabase REST
+async function supabaseFetch(url) {
+  const res = await fetch(url, {
+    headers: {
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+// =========== TOAST ===========
 function showToast(message, isError = false) {
   const toast = document.getElementById("toast");
   const msg = document.getElementById("toastMessage");
-  if (!toast || !msg) {
-    // fallback console
-    if (isError) console.error(message);
-    else console.log(message);
-    return;
-  }
-
+  if (!toast || !msg) return;
   toast.classList.remove("error");
   if (isError) toast.classList.add("error");
-
   msg.textContent = message;
   toast.classList.add("show");
-
   setTimeout(() => toast.classList.remove("show"), 2500);
 }
 
-// ---------- CART helpers ----------
+// =========== CART HELPERS ===========
 function getCart() {
   const cart = localStorage.getItem("cart");
   return cart ? JSON.parse(cart) : [];
@@ -32,54 +39,54 @@ function saveCart(cart) {
   localStorage.setItem("cart", JSON.stringify(cart));
 }
 
-// ---------- Global state ----------
+// =========== PRODUCTS (global) ===========
 let products = [];
 let filteredProducts = [];
 let currentSearchTerm = "";
 let currentCategory = "";
 
-// ---------- Load products from backend ----------
+// =========== LOAD PRODUCTS ===========
 async function loadProducts() {
   try {
-    const res = await fetch(API_BASE + "get_products.php");
-    if (!res.ok) throw new Error("Network response not ok: " + res.status);
-
-    const data = await res.json();
-    products = data.products || [];
+    const data = await supabaseFetch(API_PRODUCTS);
+    // supabase returns an array of rows
+    products = Array.isArray(data) ? data : [];
     applyFilters();
   } catch (err) {
     console.error("Error loading products:", err);
+    const container = document.getElementById("productsContainer");
+    if (container) container.innerHTML = `<p class="text-red-600">Failed to load products. Check console.</p>`;
   }
 }
 
-// ---------- Filtering ----------
+// =========== FILTER & RENDER ===========
 function applyFilters() {
   const term = currentSearchTerm.trim().toLowerCase();
-  const cat = (currentCategory || "").trim().toLowerCase();
+  const category = currentCategory.trim().toLowerCase();
 
   filteredProducts = products.filter(p => {
-    const nameOk = !term || (p.name && p.name.toLowerCase().includes(term));
-    const catOk = !cat || (p.category && p.category.toLowerCase() === cat);
-    return nameOk && catOk;
+    const name = (p.name || "").toLowerCase();
+    const cat = (p.category || "").toLowerCase();
+    const matchesSearch = !term || name.includes(term);
+    const matchesCategory = !category || cat === category;
+    return matchesSearch && matchesCategory;
   });
 
   renderProducts();
 }
 
-// ---------- Render Products ----------
 function renderProducts() {
   const container = document.getElementById("productsContainer");
   if (!container) return;
   container.innerHTML = "";
 
   const list = filteredProducts.length ? filteredProducts : [];
-
-  if (!list || list.length === 0) {
+  if (!list.length) {
     container.innerHTML = `<p class="text-gray-500">No products found.</p>`;
     return;
   }
 
-  list.forEach((p) => {
+  list.forEach(p => {
     const card = document.createElement("div");
     card.className = "bg-white shadow rounded-lg p-4 flex flex-col justify-between";
 
@@ -103,23 +110,18 @@ function renderProducts() {
   });
 }
 
-// ---------- Add to cart ----------
+// =========== CART UI ===========
 function addToCart(productId) {
   let cart = getCart();
-  const prod = products.find((p) => p.id == productId);
-  if (!prod) {
-    showToast("Product not found", true);
-    return;
-  }
-  const existing = cart.find((item) => item.id == productId);
+  const prod = products.find(p => p.id === productId || p.id == productId);
+  if (!prod) { showToast("Product not found", true); return; }
+  const existing = cart.find(i => i.id == productId);
   if (existing) existing.qty += 1;
   else cart.push({ id: prod.id, name: prod.name, price: prod.price, qty: 1 });
   saveCart(cart);
   showToast("Added to cart");
-  renderCart();
 }
 
-// ---------- Render cart ----------
 function renderCart() {
   const cartItemsDiv = document.getElementById("cartItems");
   const totalSpan = document.getElementById("cartTotal");
@@ -138,11 +140,10 @@ function renderCart() {
 
   let total = 0;
   cart.forEach((item, index) => {
-    const lineTotal = item.price * item.qty;
-    total += lineTotal;
-
     const row = document.createElement("div");
     row.className = "flex justify-between items-center bg-white p-3 rounded shadow";
+    const lineTotal = item.price * item.qty;
+    total += lineTotal;
     row.innerHTML = `
       <div>
         <p class="font-semibold">${item.name}</p>
@@ -161,9 +162,8 @@ function renderCart() {
 
   totalSpan.textContent = total;
 
-  // handlers
-  cartItemsDiv.querySelectorAll(".qty-input").forEach((input) => {
-    input.addEventListener("change", (e) => {
+  cartItemsDiv.querySelectorAll(".qty-input").forEach(input => {
+    input.addEventListener("change", e => {
       let cart = getCart();
       const idx = parseInt(e.target.dataset.index);
       let newQty = parseInt(e.target.value);
@@ -174,8 +174,8 @@ function renderCart() {
     });
   });
 
-  cartItemsDiv.querySelectorAll("[data-remove]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+  cartItemsDiv.querySelectorAll("[data-remove]").forEach(btn => {
+    btn.addEventListener("click", e => {
       let cart = getCart();
       const idx = parseInt(e.target.dataset.remove);
       cart.splice(idx, 1);
@@ -185,62 +185,43 @@ function renderCart() {
   });
 }
 
-// ---------- Checkout form ----------
+// =========== CHECKOUT FORM ===========
 function setupCheckoutForm() {
   const form = document.getElementById("checkoutForm");
   const msg = document.getElementById("orderMsg");
   if (!form) return;
 
-  form.addEventListener("submit", async (e) => {
+  form.addEventListener("submit", async e => {
     e.preventDefault();
     const cart = getCart();
-    if (cart.length === 0) { showToast("Your cart is empty."); return; }
-
+    if (cart.length === 0) { showToast("Your cart is empty.", true); return; }
     const name = form.querySelector('input[placeholder="Your Name"]').value.trim();
     const mobile = form.querySelector('input[placeholder="Mobile Number"]').value.trim();
-    const address = form.querySelector("textarea").value.trim();
+    const address = form.querySelector('textarea').value.trim();
 
-    try {
-      const res = await fetch(API_BASE + "place_order.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, mobile, address, cart })
-      });
-      const data = await res.json();
-      if (data.success) {
-        localStorage.removeItem("cart");
-        renderCart();
-        form.reset();
-        if (msg) { msg.textContent = `✅ Order placed! ID ${data.order_id}`; msg.classList.remove("hidden"); }
-      } else {
-        showToast(data.message || "Failed to place order", true);
-      }
-    } catch (err) {
-      console.error(err);
-      showToast("Error placing order", true);
-    }
+    // For demo: store orders in localStorage (or you can create orders table in Supabase)
+    const orders = JSON.parse(localStorage.getItem("orders") || "[]");
+    const orderId = Date.now();
+    orders.push({ orderId, name, mobile, address, cart, total: cart.reduce((s,i)=>s + i.price * i.qty,0) });
+    localStorage.setItem("orders", JSON.stringify(orders));
+
+    localStorage.removeItem("cart");
+    renderCart();
+    form.reset();
+    if (msg) { msg.textContent = `✅ Order placed successfully! Your order ID is ${orderId}.`; msg.classList.remove("hidden"); }
   });
 }
 
-// ---------- Init ----------
+// =========== INIT ===========
 document.addEventListener("DOMContentLoaded", () => {
-  // load products if products container exists
-  if (document.getElementById("productsContainer")) loadProducts();
-
-  // search
-  const searchInput = document.getElementById("searchInput");
-  if (searchInput) searchInput.addEventListener("input", (e) => {
-    currentSearchTerm = e.target.value;
-    applyFilters();
-  });
-
-  // category
-  const categorySelect = document.getElementById("categoryFilter");
-  if (categorySelect) categorySelect.addEventListener("change", (e) => {
-    currentCategory = e.target.value;
-    applyFilters();
-  });
-
+  const productsContainer = document.getElementById("productsContainer");
+  if (productsContainer) {
+    loadProducts();
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput) searchInput.addEventListener("input", e => { currentSearchTerm = e.target.value; applyFilters(); });
+    const categorySelect = document.getElementById("categoryFilter");
+    if (categorySelect) categorySelect.addEventListener("change", e => { currentCategory = e.target.value; applyFilters(); });
+  }
   renderCart();
   setupCheckoutForm();
 });

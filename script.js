@@ -1,9 +1,18 @@
-// script.js — frontend -> backend bridge
-const API_BASE = "https://freshmart2.42web.io/backend/"; // <-- set your backend URL (use http:// if no HTTPS)
+/* FINAL script.js - use this file on GitHub Pages
+   IMPORTANT: set API_BASE to your live backend
+*/
+const API_BASE = "https://freshmart2.42web.io/backend/";
 
+// ---------- UI toast ----------
 function showToast(message, isError = false) {
   const toast = document.getElementById("toast");
   const msg = document.getElementById("toastMessage");
+  if (!toast || !msg) {
+    // fallback console
+    if (isError) console.error(message);
+    else console.log(message);
+    return;
+  }
 
   toast.classList.remove("error");
   if (isError) toast.classList.add("error");
@@ -11,60 +20,74 @@ function showToast(message, isError = false) {
   msg.textContent = message;
   toast.classList.add("show");
 
-  setTimeout(() => {
-    toast.classList.remove("show");
-  }, 2500);
+  setTimeout(() => toast.classList.remove("show"), 2500);
 }
 
-// --------- GLOBAL PRODUCTS (loaded from backend) ----------
+// ---------- CART helpers ----------
+function getCart() {
+  const cart = localStorage.getItem("cart");
+  return cart ? JSON.parse(cart) : [];
+}
+function saveCart(cart) {
+  localStorage.setItem("cart", JSON.stringify(cart));
+}
+
+// ---------- Global state ----------
 let products = [];
 let filteredProducts = [];
 let currentSearchTerm = "";
 let currentCategory = "";
 
-// ---------- CART HELPERS ----------
-function getCart() {
-  const cart = localStorage.getItem("cart");
-  return cart ? JSON.parse(cart) : [];
-}
-
-function saveCart(cart) {
-  localStorage.setItem("cart", JSON.stringify(cart));
-}
-
-// ---------- LOAD PRODUCTS FROM BACKEND ----------
+// ---------- Load products from backend ----------
 async function loadProducts() {
   try {
     const res = await fetch(API_BASE + "get_products.php");
-    products = await res.json();
-    applyFilters(); // instead of renderProducts directly
+    if (!res.ok) throw new Error("Network response not OK: " + res.status);
+
+    const text = await res.text();
+    // Try to parse JSON defensively
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error("Invalid JSON from API:", text);
+      throw new Error("Invalid JSON returned from API");
+    }
+
+    // Accept two shapes: array OR { success, products }
+    if (Array.isArray(data)) {
+      products = data;
+    } else if (data && Array.isArray(data.products)) {
+      products = data.products;
+    } else if (data && data.success && Array.isArray(data.products)) {
+      products = data.products;
+    } else {
+      // Fallback: try to extract array-like fields
+      products = Array.isArray(data) ? data : [];
+    }
+
+    applyFilters();
   } catch (err) {
     console.error("Error loading products:", err);
     showToast("Failed to load products", true);
   }
 }
 
-// ---------- APPLY SEARCH & CATEGORY FILTER ----------
+// ---------- Filtering ----------
 function applyFilters() {
-  const term = currentSearchTerm.toLowerCase();
-  const category = currentCategory;
+  const term = currentSearchTerm.trim().toLowerCase();
+  const cat = (currentCategory || "").trim().toLowerCase();
 
-  filteredProducts = products.filter((p) => {
-    const matchesSearch =
-      !term ||
-      (p.name && p.name.toLowerCase().includes(term));
-
-    const matchesCategory =
-      !category ||
-      (p.category && p.category.toLowerCase() === category.toLowerCase());
-
-    return matchesSearch && matchesCategory;
+  filteredProducts = products.filter(p => {
+    const nameOk = !term || (p.name && p.name.toLowerCase().includes(term));
+    const catOk = !cat || (p.category && p.category.toLowerCase() === cat);
+    return nameOk && catOk;
   });
 
   renderProducts();
 }
 
-// ---------- RENDER PRODUCTS ----------
+// ---------- Render Products ----------
 function renderProducts() {
   const container = document.getElementById("productsContainer");
   if (!container) return;
@@ -101,7 +124,7 @@ function renderProducts() {
   });
 }
 
-// ---------- ADD TO CART ----------
+// ---------- Add to cart ----------
 function addToCart(productId) {
   let cart = getCart();
   const prod = products.find((p) => p.id == productId);
@@ -109,20 +132,15 @@ function addToCart(productId) {
     showToast("Product not found", true);
     return;
   }
-
   const existing = cart.find((item) => item.id == productId);
-
-  if (existing) {
-    existing.qty += 1;
-  } else {
-    cart.push({ id: prod.id, name: prod.name, price: prod.price, qty: 1 });
-  }
-
+  if (existing) existing.qty += 1;
+  else cart.push({ id: prod.id, name: prod.name, price: prod.price, qty: 1 });
   saveCart(cart);
   showToast("Added to cart");
+  renderCart();
 }
 
-// ---------- RENDER CART ----------
+// ---------- Render cart ----------
 function renderCart() {
   const cartItemsDiv = document.getElementById("cartItems");
   const totalSpan = document.getElementById("cartTotal");
@@ -130,7 +148,6 @@ function renderCart() {
   if (!cartItemsDiv || !totalSpan) return;
 
   let cart = getCart();
-
   cartItemsDiv.innerHTML = "";
   if (cart.length === 0) {
     if (emptyMsg) emptyMsg.classList.remove("hidden");
@@ -141,14 +158,12 @@ function renderCart() {
   }
 
   let total = 0;
-
   cart.forEach((item, index) => {
-    const row = document.createElement("div");
-    row.className = "flex justify-between items-center bg-white p-3 rounded shadow";
-
     const lineTotal = item.price * item.qty;
     total += lineTotal;
 
+    const row = document.createElement("div");
+    row.className = "flex justify-between items-center bg-white p-3 rounded shadow";
     row.innerHTML = `
       <div>
         <p class="font-semibold">${item.name}</p>
@@ -162,13 +177,12 @@ function renderCart() {
         <button class="text-red-600 text-sm" data-remove="${index}">Remove</button>
       </div>
     `;
-
     cartItemsDiv.appendChild(row);
   });
 
   totalSpan.textContent = total;
 
-  // Qty change handler
+  // handlers
   cartItemsDiv.querySelectorAll(".qty-input").forEach((input) => {
     input.addEventListener("change", (e) => {
       let cart = getCart();
@@ -181,7 +195,6 @@ function renderCart() {
     });
   });
 
-  // Remove handler
   cartItemsDiv.querySelectorAll("[data-remove]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       let cart = getCart();
@@ -193,7 +206,7 @@ function renderCart() {
   });
 }
 
-// ---------- CHECKOUT FORM ----------
+// ---------- Checkout form ----------
 function setupCheckoutForm() {
   const form = document.getElementById("checkoutForm");
   const msg = document.getElementById("orderMsg");
@@ -201,12 +214,8 @@ function setupCheckoutForm() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-
     const cart = getCart();
-    if (cart.length === 0) {
-      showToast("Your cart is empty.", true);
-      return;
-    }
+    if (cart.length === 0) { showToast("Your cart is empty."); return; }
 
     const name = form.querySelector('input[placeholder="Your Name"]').value.trim();
     const mobile = form.querySelector('input[placeholder="Mobile Number"]').value.trim();
@@ -216,57 +225,43 @@ function setupCheckoutForm() {
       const res = await fetch(API_BASE + "place_order.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, mobile, address, cart }),
+        body: JSON.stringify({ name, mobile, address, cart })
       });
-
       const data = await res.json();
-
       if (data.success) {
         localStorage.removeItem("cart");
         renderCart();
         form.reset();
-        if (msg) {
-          msg.textContent = `✅ Order placed successfully! Your order ID is ${data.order_id}.`;
-          msg.classList.remove("hidden");
-        }
+        if (msg) { msg.textContent = `✅ Order placed! ID ${data.order_id}`; msg.classList.remove("hidden"); }
       } else {
-        showToast(data.message || "Something went wrong", true);
+        showToast(data.message || "Failed to place order", true);
       }
     } catch (err) {
       console.error(err);
-      showToast("Something went wrong", true);
+      showToast("Error placing order", true);
     }
   });
 }
 
-// ---------- INIT ----------
+// ---------- Init ----------
 document.addEventListener("DOMContentLoaded", () => {
-  const productsContainer = document.getElementById("productsContainer");
+  // load products if products container exists
+  if (document.getElementById("productsContainer")) loadProducts();
 
-  if (productsContainer) {
-    // Load products
-    loadProducts();
+  // search
+  const searchInput = document.getElementById("searchInput");
+  if (searchInput) searchInput.addEventListener("input", (e) => {
+    currentSearchTerm = e.target.value;
+    applyFilters();
+  });
 
-    // Search input
-    const searchInput = document.getElementById("searchInput");
-    if (searchInput) {
-      searchInput.addEventListener("input", (e) => {
-        currentSearchTerm = e.target.value;
-        applyFilters();
-      });
-    }
+  // category
+  const categorySelect = document.getElementById("categoryFilter");
+  if (categorySelect) categorySelect.addEventListener("change", (e) => {
+    currentCategory = e.target.value;
+    applyFilters();
+  });
 
-    // Category filter
-    const categorySelect = document.getElementById("categoryFilter");
-    if (categorySelect) {
-      categorySelect.addEventListener("change", (e) => {
-        currentCategory = e.target.value;
-        applyFilters();
-      });
-    }
-  }
-
-  // Cart + checkout (on pages where those elements exist)
   renderCart();
   setupCheckoutForm();
 });

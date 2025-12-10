@@ -1,3 +1,6 @@
+// script.js — frontend -> backend bridge
+const API_BASE = "https://freshmart2.42web.io/backend/"; // <-- set your backend URL (use http:// if no HTTPS)
+
 function showToast(message, isError = false) {
   const toast = document.getElementById("toast");
   const msg = document.getElementById("toastMessage");
@@ -14,12 +17,10 @@ function showToast(message, isError = false) {
 }
 
 // --------- GLOBAL PRODUCTS (loaded from backend) ----------
-// --------- GLOBAL PRODUCTS (loaded from backend) ----------
 let products = [];
 let filteredProducts = [];
 let currentSearchTerm = "";
 let currentCategory = "";
-
 
 // ---------- CART HELPERS ----------
 function getCart() {
@@ -32,16 +33,17 @@ function saveCart(cart) {
 }
 
 // ---------- LOAD PRODUCTS FROM BACKEND ----------
-// ---------- LOAD PRODUCTS FROM BACKEND ----------
 async function loadProducts() {
   try {
-    const res = await fetch("backend/get_products.php");
+    const res = await fetch(API_BASE + "get_products.php");
     products = await res.json();
     applyFilters(); // instead of renderProducts directly
   } catch (err) {
     console.error("Error loading products:", err);
+    showToast("Failed to load products", true);
   }
 }
+
 // ---------- APPLY SEARCH & CATEGORY FILTER ----------
 function applyFilters() {
   const term = currentSearchTerm.toLowerCase();
@@ -50,7 +52,7 @@ function applyFilters() {
   filteredProducts = products.filter((p) => {
     const matchesSearch =
       !term ||
-      p.name.toLowerCase().includes(term);
+      (p.name && p.name.toLowerCase().includes(term));
 
     const matchesCategory =
       !category ||
@@ -61,7 +63,6 @@ function applyFilters() {
 
   renderProducts();
 }
-
 
 // ---------- RENDER PRODUCTS ----------
 function renderProducts() {
@@ -100,14 +101,12 @@ function renderProducts() {
   });
 }
 
-
 // ---------- ADD TO CART ----------
 function addToCart(productId) {
   let cart = getCart();
   const prod = products.find((p) => p.id == productId);
   if (!prod) {
-    showToast("Added to cart");
-
+    showToast("Product not found", true);
     return;
   }
 
@@ -121,7 +120,6 @@ function addToCart(productId) {
 
   saveCart(cart);
   showToast("Added to cart");
-
 }
 
 // ---------- RENDER CART ----------
@@ -206,7 +204,7 @@ function setupCheckoutForm() {
 
     const cart = getCart();
     if (cart.length === 0) {
-      alert("Your cart is empty.");
+      showToast("Your cart is empty.", true);
       return;
     }
 
@@ -215,7 +213,7 @@ function setupCheckoutForm() {
     const address = form.querySelector("textarea").value.trim();
 
     try {
-      const res = await fetch("backend/place_order.php", {
+      const res = await fetch(API_BASE + "place_order.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, mobile, address, cart }),
@@ -232,7 +230,7 @@ function setupCheckoutForm() {
           msg.classList.remove("hidden");
         }
       } else {
-        showToast("Something went wrong", true);
+        showToast(data.message || "Something went wrong", true);
       }
     } catch (err) {
       console.error(err);
@@ -240,6 +238,7 @@ function setupCheckoutForm() {
     }
   });
 }
+
 // ---------- INIT ----------
 document.addEventListener("DOMContentLoaded", () => {
   const productsContainer = document.getElementById("productsContainer");

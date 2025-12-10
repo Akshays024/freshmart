@@ -42,34 +42,13 @@ let currentCategory = "";
 async function loadProducts() {
   try {
     const res = await fetch(API_BASE + "get_products.php");
-    if (!res.ok) throw new Error("Network response not OK: " + res.status);
+    if (!res.ok) throw new Error("Network response not ok: " + res.status);
 
-    const text = await res.text();
-    // Try to parse JSON defensively
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      console.error("Invalid JSON from API:", text);
-      throw new Error("Invalid JSON returned from API");
-    }
-
-    // Accept two shapes: array OR { success, products }
-    if (Array.isArray(data)) {
-      products = data;
-    } else if (data && Array.isArray(data.products)) {
-      products = data.products;
-    } else if (data && data.success && Array.isArray(data.products)) {
-      products = data.products;
-    } else {
-      // Fallback: try to extract array-like fields
-      products = Array.isArray(data) ? data : [];
-    }
-
+    const data = await res.json();
+    products = data.products || [];
     applyFilters();
   } catch (err) {
     console.error("Error loading products:", err);
-    showToast("Failed to load products", true);
   }
 }
 

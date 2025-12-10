@@ -1,19 +1,24 @@
-/* final script.js for GitHub Pages + Supabase backend */
+/* Updated script.js with Supabase order placement */
 
 // =========== CONFIG ===========
-const SUPABASE_URL = "https://ujwwiuhmylcrgpofgxly.supabase.co"; // replace
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqd3dpdWhteWxjcmdwb2ZneGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzNzMwNjksImV4cCI6MjA4MDk0OTA2OX0.UFPKwGN585SrFZ3Tk8YmC2AYvKMWMRhfthAa_-5QeNY";                 // replace
+const SUPABASE_URL = "https://ujwwiuhmylcrgpofgxly.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqd3dpdWhteWxjcmdwb2ZneGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzNzMwNjksImV4cCI6MjA4MDk0OTA2OX0.UFPKwGN585SrFZ3Tk8YmC2AYvKMWMRhfthAa_-5QeNY";
+
 const API_PRODUCTS = `${SUPABASE_URL}/rest/v1/products?select=id,name,price,category,image_url&order=id.desc`;
 
-// helper to call supabase REST
-async function supabaseFetch(url) {
+// Helper to call supabase REST
+async function supabaseFetch(url, options = {}) {
+  const defaultHeaders = {
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+    "Content-Type": "application/json",
+  };
+  
   const res = await fetch(url, {
-    headers: {
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      "Content-Type": "application/json",
-    },
+    ...options,
+    headers: { ...defaultHeaders, ...options.headers }
   });
+  
   if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
   return res.json();
 }
@@ -35,6 +40,7 @@ function getCart() {
   const cart = localStorage.getItem("cart");
   return cart ? JSON.parse(cart) : [];
 }
+
 function saveCart(cart) {
   localStorage.setItem("cart", JSON.stringify(cart));
 }
@@ -49,7 +55,6 @@ let currentCategory = "";
 async function loadProducts() {
   try {
     const data = await supabaseFetch(API_PRODUCTS);
-    // supabase returns an array of rows
     products = Array.isArray(data) ? data : [];
     applyFilters();
   } catch (err) {
@@ -114,25 +119,40 @@ function renderProducts() {
 function addToCart(productId) {
   let cart = getCart();
   const prod = products.find(p => p.id === productId || p.id == productId);
-  if (!prod) { showToast("Product not found", true); return; }
+  if (!prod) { 
+    showToast("Product not found", true); 
+    return; 
+  }
+  
   const existing = cart.find(i => i.id == productId);
-  if (existing) existing.qty += 1;
-  else cart.push({ id: prod.id, name: prod.name, price: prod.price, qty: 1 });
+  if (existing) {
+    existing.qty += 1;
+  } else {
+    cart.push({ 
+      id: prod.id, 
+      name: prod.name, 
+      price: prod.price, 
+      qty: 1 
+    });
+  }
+  
   saveCart(cart);
   showToast("Added to cart");
 }
 
 function renderCart() {
   const cartItemsDiv = document.getElementById("cartItems");
-  const totalSpan = document.getElementById("cartTotal");
+  const totalSpans = document.querySelectorAll("#cartTotal");
   const emptyMsg = document.getElementById("emptyMsg");
-  if (!cartItemsDiv || !totalSpan) return;
+  
+  if (!cartItemsDiv) return;
 
   let cart = getCart();
   cartItemsDiv.innerHTML = "";
+  
   if (cart.length === 0) {
     if (emptyMsg) emptyMsg.classList.remove("hidden");
-    totalSpan.textContent = "0";
+    totalSpans.forEach(span => span.textContent = "0");
     return;
   } else {
     if (emptyMsg) emptyMsg.classList.add("hidden");
@@ -144,6 +164,7 @@ function renderCart() {
     row.className = "flex justify-between items-center bg-white p-3 rounded shadow";
     const lineTotal = item.price * item.qty;
     total += lineTotal;
+    
     row.innerHTML = `
       <div>
         <p class="font-semibold">${item.name}</p>
@@ -160,8 +181,9 @@ function renderCart() {
     cartItemsDiv.appendChild(row);
   });
 
-  totalSpan.textContent = total;
+  totalSpans.forEach(span => span.textContent = total);
 
+  // Quantity change handlers
   cartItemsDiv.querySelectorAll(".qty-input").forEach(input => {
     input.addEventListener("change", e => {
       let cart = getCart();
@@ -174,6 +196,7 @@ function renderCart() {
     });
   });
 
+  // Remove button handlers
   cartItemsDiv.querySelectorAll("[data-remove]").forEach(btn => {
     btn.addEventListener("click", e => {
       let cart = getCart();
@@ -193,35 +216,118 @@ function setupCheckoutForm() {
 
   form.addEventListener("submit", async e => {
     e.preventDefault();
+    
     const cart = getCart();
-    if (cart.length === 0) { showToast("Your cart is empty.", true); return; }
+    if (cart.length === 0) { 
+      showToast("Your cart is empty.", true); 
+      return; 
+    }
+
     const name = form.querySelector('input[placeholder="Your Name"]').value.trim();
     const mobile = form.querySelector('input[placeholder="Mobile Number"]').value.trim();
     const address = form.querySelector('textarea').value.trim();
 
-    // For demo: store orders in localStorage (or you can create orders table in Supabase)
-    const orders = JSON.parse(localStorage.getItem("orders") || "[]");
-    const orderId = Date.now();
-    orders.push({ orderId, name, mobile, address, cart, total: cart.reduce((s,i)=>s + i.price * i.qty,0) });
-    localStorage.setItem("orders", JSON.stringify(orders));
+    if (!name || !mobile || !address) {
+      showToast("Please fill all fields", true);
+      return;
+    }
 
-    localStorage.removeItem("cart");
-    renderCart();
-    form.reset();
-    if (msg) { msg.textContent = `✅ Order placed successfully! Your order ID is ${orderId}.`; msg.classList.remove("hidden"); }
+    // Calculate total
+    const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+    try {
+      // 1. Create order in orders table
+      const orderResponse = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          customer_name: name,
+          mobile: mobile,
+          address: address,
+          total_amount: total
+        })
+      });
+
+      if (!orderResponse.ok) {
+        throw new Error('Failed to create order');
+      }
+
+      const orderData = await orderResponse.json();
+      const orderId = orderData[0].id;
+
+      // 2. Create order items
+      const orderItems = cart.map(item => ({
+        order_id: orderId,
+        product_id: item.id,
+        product_name: item.name,
+        price: item.price,
+        quantity: item.qty,
+        line_total: item.price * item.qty
+      }));
+
+      const itemsResponse = await fetch(`${SUPABASE_URL}/rest/v1/order_items`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(orderItems)
+      });
+
+      if (!itemsResponse.ok) {
+        throw new Error('Failed to create order items');
+      }
+
+      // Success!
+      localStorage.removeItem("cart");
+      renderCart();
+      form.reset();
+      
+      if (msg) { 
+        msg.textContent = `✅ Order #${orderId} placed successfully! Total: ₹${total}`;
+        msg.classList.remove("hidden");
+      }
+      
+      showToast(`Order placed successfully! Order ID: #${orderId}`);
+
+    } catch (error) {
+      console.error('Order placement error:', error);
+      showToast('Failed to place order. Please try again.', true);
+    }
   });
 }
 
 // =========== INIT ===========
 document.addEventListener("DOMContentLoaded", () => {
   const productsContainer = document.getElementById("productsContainer");
+  
   if (productsContainer) {
     loadProducts();
+    
     const searchInput = document.getElementById("searchInput");
-    if (searchInput) searchInput.addEventListener("input", e => { currentSearchTerm = e.target.value; applyFilters(); });
+    if (searchInput) {
+      searchInput.addEventListener("input", e => { 
+        currentSearchTerm = e.target.value; 
+        applyFilters(); 
+      });
+    }
+    
     const categorySelect = document.getElementById("categoryFilter");
-    if (categorySelect) categorySelect.addEventListener("change", e => { currentCategory = e.target.value; applyFilters(); });
+    if (categorySelect) {
+      categorySelect.addEventListener("change", e => { 
+        currentCategory = e.target.value; 
+        applyFilters(); 
+      });
+    }
   }
+  
   renderCart();
   setupCheckoutForm();
 });

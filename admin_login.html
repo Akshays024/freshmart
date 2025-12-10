@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login - FreshMart</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white shadow-lg rounded-lg p-6 w-full max-w-sm">
+    <h1 class="text-2xl font-bold mb-4 text-center">Admin Login</h1>
+
+    <p id="errorMsg" class="mb-3 text-red-600 text-sm text-center hidden"></p>
+
+    <form id="loginForm" class="space-y-3">
+      <input type="text" id="username" name="username" placeholder="Username"
+             class="w-full border p-2 rounded" required>
+      <input type="password" id="password" name="password" placeholder="Password"
+             class="w-full border p-2 rounded" required>
+      <button type="submit"
+              class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 font-semibold">
+        Login
+      </button>
+    </form>
+
+    <div class="mt-4 text-xs text-gray-500 text-center">
+      <p>Demo credentials:</p>
+      <p>Username: <strong>admin</strong></p>
+      <p>Password: <strong>admin123</strong></p>
+    </div>
+  </div>
+
+  <script>
+    // Supabase Configuration
+    const SUPABASE_URL = "https://ujwwiuhmylcrgpofgxly.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqd3dpdWhteWxjcmdwb2ZneGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzNzMwNjksImV4cCI6MjA4MDk0OTA2OX0.UFPKwGN585SrFZ3Tk8YmC2AYvKMWMRhfthAa_-5QeNY";
+
+    // Check if already logged in
+    if (sessionStorage.getItem('admin_logged_in') === 'true') {
+      window.location.href = 'admin_products.html';
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const errorMsg = document.getElementById('errorMsg');
+
+      try {
+        // Query admin_users table
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/admin_users?username=eq.${username}&password_hash=eq.${password}`,
+          {
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const data = await response.json();
+
+        if (data && data.length > 0) {
+          // Login successful
+          sessionStorage.setItem('admin_logged_in', 'true');
+          sessionStorage.setItem('admin_username', username);
+          window.location.href = 'admin_products.html';
+        } else {
+          // Login failed
+          errorMsg.textContent = 'Invalid username or password';
+          errorMsg.classList.remove('hidden');
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        errorMsg.textContent = 'Login failed. Please try again.';
+        errorMsg.classList.remove('hidden');
+      }
+    });
+  </script>
+</body>
+</html>

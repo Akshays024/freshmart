@@ -8,7 +8,7 @@
 
 // =========== CONFIG ===========
 const SUPABASE_URL = "https://ujwwiuhmylcrgpofgxly.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqd3dpdWhteWxjcmdwb2ZneGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzNzMwNjksImV4cCI6MjA4MDk0OTA2OX0.UFPKwGN5855SrFZ3Tk8YmC2AYvKMWMRhfthAa_-5QeNY";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqd3dpdWhteWxjcmdwb2ZneGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzNzMwNjksImV4cCI6MjA4MDk0OTA2OX0.UFPKwGN585SrFZ3Tk8YmC2AYvKMWMRhfthAa_-5QeNY";
 
 const API_PRODUCTS = `${SUPABASE_URL}/rest/v1/products?select=id,name,price,category,image_url&order=id.desc`;
 

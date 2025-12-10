@@ -1,21 +1,30 @@
 <?php
+// === DO NOT ADD ANYTHING ABOVE THIS LINE ===
+// CORS HEADERS
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Content-Type: application/json");
 
-require "config.php";
-
-$sql = "SELECT id, name, price, category, image_url FROM products";
-$result = $conn->query($sql);
-
-$products = [];
-
-if ($result && $result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $row['price'] = (float)$row['price']; // convert to number
-        $products[] = $row;
-    }
+// Preflight response
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
 }
 
-echo json_encode($products);
+require __DIR__ . "/config.php";
 
-$conn->close();
+// Fetch products
+$sql = "SELECT id, name, price, category, image_url FROM products";
+$res = $conn->query($sql);
+
+$products = [];
+while ($row = $res->fetch_assoc()) {
+    $products[] = $row;
+}
+
+echo json_encode([
+    "success" => true,
+    "products" => $products
+]);
 ?>
